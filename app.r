@@ -336,7 +336,8 @@ server <- function(input, output, session) {
       DT::datatable(transactions_df[,c("DayOfWeek","DateTime","Details","Amount")], 
                     options = list(pageLength = 13))
       
-    },message = "Loading Opal Data")
+    },message = "Loading Opal Data",
+    detail = "This may take a minute or two")
     
     updateTabItems(session, "tabs", selected = "data")
     
