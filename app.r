@@ -262,9 +262,10 @@ sidebar <- dashboardSidebar(
     menuItem("Log in",        tabName = "login",    icon = icon("unlock")),
     menuItem("Data",          tabName = "data",     icon = icon("file")),
     menuItem("Date and Time", tabName = "datetime", icon = icon("calendar")), 
-    menuItem("Neighbours Date & Time ", tabName = "otherdatetime", icon = icon("users")), 
+    menuItem("Neighbours Date & Time", tabName = "otherdatetime", icon = icon("users")), 
+    menuItem("Trip  and $ Summary",       tabName = "money",    icon = icon("flag")),
     menuItem("Locations",     tabName= "locations", icon = icon("map")),
-    menuItem("Tutorial",      tabName= "tutorial",  icon = icon("question-circle"))
+    menuItem("About",      tabName= "about",  icon = icon("question-circle"))
   ),
   collapsed = TRUE)
 
@@ -287,29 +288,49 @@ body <- dashboardBody(tabItems(
           ),
           DT::DTOutput("opalDataTable")),
   
+  
   ## date/time tab
   
   tabItem(tabName = "datetime",
           #plotlyOutput("ggplotly_time_plot",height = "1000px")
-          
-          plotlyOutput("mondayPlot",height = "200px"),
-          plotlyOutput("tuesdayPlot",height = "200px"),
-          plotlyOutput("wednesdayPlot",height = "200px"),
-          plotlyOutput("thursdayPlot",height = "200px"),
-          plotlyOutput("fridayPlot",height = "200px"),
-          plotlyOutput("saturdayPlot",height = "200px"),
-          plotlyOutput("sundayPlot",height = "200px")
+          box(
+            plotlyOutput("mondayPlot",height = "200px"),
+            plotlyOutput("tuesdayPlot",height = "200px"),
+            plotlyOutput("wednesdayPlot",height = "200px"),
+            plotlyOutput("thursdayPlot",height = "200px"),
+            plotlyOutput("fridayPlot",height = "200px"),
+            plotlyOutput("saturdayPlot",height = "200px"),
+            plotlyOutput("sundayPlot",height = "200px"),
+            title = "Your Weekly Opal Usage",
+            width = 12)
   ),
   tabItem(tabName = "otherdatetime",
           #plotlyOutput("ggplotly_time_plot",height = "1000px")
-          
-          plotlyOutput("mondayPlotO",height = "200px"),
-          plotlyOutput("tuesdayPlotO",height = "200px"),
-          plotlyOutput("wednesdayPlotO",height = "200px"),
-          plotlyOutput("thursdayPlotO",height = "200px"),
-          plotlyOutput("fridayPlotO",height = "200px"),
-          plotlyOutput("saturdayPlotO",height = "200px"),
-          plotlyOutput("sundayPlotO",height = "200px")
+          box(
+            plotlyOutput("mondayPlotO",height = "200px"),
+            plotlyOutput("tuesdayPlotO",height = "200px"),
+            plotlyOutput("wednesdayPlotO",height = "200px"),
+            plotlyOutput("thursdayPlotO",height = "200px"),
+            plotlyOutput("fridayPlotO",height = "200px"),
+            plotlyOutput("saturdayPlotO",height = "200px"),
+            plotlyOutput("sundayPlotO",height = "200px"),
+            title = "Your Neighbours' Weekly Opal Usage",
+            width = 12)
+  ),
+  tabItem(tabName = "money",
+          box(textOutput("text_summary"),#output$pct_half_price)),
+              title = "Summary"),
+          DT::dataTableOutput("summary_table"),
+          sliderInput("num_weeks","Last n weeks", min = 1, max = 52, value = 12, step = 1)
+  ),
+  
+  tabItem(tabName = "about",
+          box(p(strong("OpalMiner")," shows you the weekly patterns in your public transport usage."),
+              br(),
+              p("It allows you to compare your usage to that of a comprable cohort of people tapping on and off at locations near where you do."),
+              br(), 
+              p("It also shows you how much money you could save by shifting the times at which you ride the train."),
+              title = "About")
   )
   
   
@@ -341,7 +362,7 @@ server <- function(input, output, session) {
     
     updateTabItems(session, "tabs", selected = "data")
     
-    if(is.null(transactions_df)){isolate("Not Logged In")} else {isolate("Logged In")}
+    if(is.null(transactions_df)){isolate("Not Logged In, perhaps your password is incorrect")} else {isolate("Logged In, click the hamburger to see the menu above.")}
     
   })
   
@@ -386,6 +407,8 @@ server <- function(input, output, session) {
                  format="%H:%M:%S", 
                  tz = "GMT")
     }
+    
+    
     
     
     #make the plot with ggplot
@@ -458,7 +481,94 @@ server <- function(input, output, session) {
   output$saturdayPlotO<-renderPlotly(plot_day_other(others_df, "Saturday"))
   output$sundayPlotO<-renderPlotly(plot_day_other(others_df, "Sunday"))
   
+  #summary info DT
+  output$summary_table <- renderDT(
+    {
+      
+      maxDate <-max(transactions_df$DateTime)
+      
+      intermed<-transactions_df%>%
+        mutate(Week_number = lubridate::isoweek(transactions_df$DateTime))%>%
+        filter(!is.na(Mode),
+               input$num_weeks > (lubridate::isoweek(maxDate) - Week_number) %%52,
+               (maxDate-DateTime)<3600*24*365)%>%  
+        group_by(Week_number,Mode)%>%
+        summarise(spent_per_week = sum(Amount_n,na.rm = T),
+                  disc_per_week = sum(Discount_n,na.rm = T),
+                  trips_per_week = n())%>%
+        ungroup()%>%
+        group_by(Mode)%>%
+        summarise(av_spent_per_week = round(mean(spent_per_week,na.rm = T),2),
+                  av_trips_per_week = round(mean(trips_per_week,na.rm = T),1),
+                  av_disc_per_week = round(mean(disc_per_week,na.rm = T),1))
+      
+      intermed2<-transactions_df%>%
+        mutate(Week_number = lubridate::isoweek(transactions_df$DateTime))%>%
+        filter(!is.na(Mode),
+               input$num_weeks > (lubridate::isoweek(maxDate) - Week_number) %%52,
+               (maxDate-DateTime)<3600*24*365,
+               `Fare Applied`=="Travel Reward")%>%  
+        group_by(Week_number,Mode)%>%
+        summarise(spent_per_week = sum(Amount_n,na.rm = T),
+                  trips_per_week = n())%>%
+        ungroup()%>%
+        group_by(Mode)%>%
+        summarise(av_spent_per_week = mean(spent_per_week,na.rm = T),
+                  av_trips_per_week = mean(trips_per_week,na.rm = T))
+      
+      train_peak<-transactions_df%>%
+        mutate(Week_number = lubridate::isoweek(transactions_df$DateTime),
+               Peak_time = if_else(abs(TimeOfDay-convert2time("08:00:00"))<60 |
+                                     abs(TimeOfDay-convert2time("17:15:00"))<75,
+                                   TRUE,
+                                   FALSE
+               ))%>%
+        filter(Mode == "train",
+               input$num_weeks > (lubridate::isoweek(maxDate) - Week_number) %%52,
+               (maxDate-DateTime)<3600*24*365,
+               Peak_time)%>%  
+        group_by(Week_number,Mode)%>%
+        summarise(spent_per_week = sum(Amount_n,na.rm = T),
+                  trips_per_week = n())%>%
+        ungroup()%>%
+        group_by(Mode)%>%
+        summarise(av_spent_per_week = mean(spent_per_week,na.rm = T),
+                  av_trips_per_week = mean(trips_per_week,na.rm = T))
+      
+      dollars_spent<<- abs(sum(intermed$av_spent_per_week))
+      av_num_trips<<-sum(intermed$av_trips_per_week)
+      dollars_saveable<<- abs(train_peak$av_spent_per_week[1]*0.3)
+      peak_trip_number<<- train_peak$av_trips_per_week[1]
+      av_reward_trips<<-sum(intermed2$av_trips_per_week)
+      pct_half_price<<-av_reward_trips/av_num_trips*100
+      dollars_already_saved<<-sum(intermed$av_disc_per_week)
+      
+      DT::datatable(intermed,colnames = c("Mode of Transport", "Amount Spent in a week ($, av.)", "Number of trips per week (av.)","Av. discounts per week ($)"))
+    }
+  )
   
+  
+  
+  #output$dollars_spent
+  #output$dollars_saveable
+  #output$pct_half_price
+  output$text_summary<-renderText(paste0("In the last ",
+                                         input$num_weeks,
+                                         " weeks you are spending $",
+                                         round(dollars_spent,2),
+                                         " per week on average for ",
+                                         round(av_num_trips,1),
+                                         " trips per week. You could save $",
+                                         round(dollars_saveable,2),
+                                         " by moving the remaining ",
+                                         round(peak_trip_number,1),
+                                         " of your peak-time trips to off-peak times. ",
+                                         round(pct_half_price,0),
+                                         "% of your trips (",
+                                         round(av_reward_trips,1),
+                                         " trips) are half-price after the 8-trip Weekly Travel Reward. In total, you are already saving $",
+                                         round(dollars_already_saved,2),
+                                         " per week by travelling at off-peak times and taking advantage of discounts offered by Opal."))
 }
 
 shinyApp(ui, server)
