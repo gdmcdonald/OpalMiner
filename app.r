@@ -106,6 +106,67 @@ scrapeOpalData<-function(username,password){
 #transactions_df<-scrapeOpalData(username = "blah@gmail.com",
 #                                password = "notrealpassword")
 
+plot_day<-function(transactions_df,weekday_i_want){
+  
+  dff<-transactions_df%>%
+    filter(!is.na(Mode),DayOfWeek == weekday_i_want)
+  
+  if(nrow(dff)<1){return(plotly_empty())}
+  
+  is.weekday<-(dff$Weekday[1]=="Weekday")
+  
+  wmi2<-dff%>%
+    mutate(timeHr = strftime(TimeOfDay,format="%H",tz = "GMT")%>%as.numeric())%>%
+    group_by(Mode, timeHr)%>%
+    summarise(my_count = n())
+  
+  wmi3<-wmi2%>%
+    group_by(timeHr)%>%
+    summarise(total_count = sum(my_count))
+  
+  max_count<-max(wmi3$total_count)
+  
+  pl1<-plot_ly(data = wmi2,
+               x = ~timeHr, 
+               y = ~my_count,
+               color = ~Mode, 
+               type = "bar",
+               xaxis  = paste0("x",weekday_i_want))
+  if(is.weekday){
+    pl2<-pl1%>%
+      layout(barmode = "stack",
+             yaxis = list(title = weekday_i_want),
+             xaxis = list(range = c(0, 24),
+                          title = "Time of Day (24Hr)",
+                          autotick = FALSE,
+                          ticks = "outside",
+                          tick0 = 0,
+                          dtick = 3),
+             shapes = list(
+               list(type = "rect",
+                    fillcolor = "red", line = list(color = "red"), opacity = .2,
+                    x0 = 7, x1 = 9, xref = paste0("x",weekday_i_want),
+                    y0 = 0, y1 = max_count, yref = paste0("y",weekday_i_want)),
+               list(type = "rect",
+                    fillcolor = "red", line = list(color = "red"), opacity = .2,
+                    x0 = 16, x1 = 18.5, xref = paste0("x",weekday_i_want),
+                    y0 = 0, y1 = max_count, yref = paste0("y",weekday_i_want))
+             ))
+  } else {
+    pl2<-pl1%>%
+      layout(barmode = "stack",
+             yaxis = list(title = weekday_i_want),
+             xaxis = list(range = c(0, 24),
+                          title = "Time of Day (24Hr)",
+                          autotick = FALSE,
+                          ticks = "outside",
+                          tick0 = 0,
+                          dtick = 3)
+      )
+  }
+  return(pl2)
+}
+
 dbHeader <- dashboardHeader(title = "OpalMiner")
 dbHeader$children[[2]]$children <-  tags$a(href='https://www.opal.com.au/',
                                            tags$img(src='https://d1ic4altzx8ueg.cloudfront.net/finder-au/wp-uploads/2016/01/opal-250x250.jpg',height='40',width='40'), "OpalMiner" )
@@ -142,7 +203,15 @@ body <- dashboardBody(tabItems(
   ## date/time tab
   
   tabItem(tabName = "datetime",
-          plotlyOutput("ggplotly_time_plot",height = "1000px")
+          #plotlyOutput("ggplotly_time_plot",height = "1000px")
+          
+          plotlyOutput("mondayPlot",height = "200px"),
+          plotlyOutput("tuesdayPlot",height = "200px"),
+          plotlyOutput("wednesdayPlot",height = "200px"),
+          plotlyOutput("thursdayPlot",height = "200px"),
+          plotlyOutput("fridayPlot",height = "200px"),
+          plotlyOutput("saturdayPlot",height = "200px"),
+          plotlyOutput("sundayPlot",height = "200px")
   )
   
 ))
@@ -246,10 +315,10 @@ server <- function(input, output, session) {
       #          xmin=convert2time("16:00:00"), 
       #          xmax=convert2time("18:30:00"), 
       #          ymin=0, 
-      #          ymax=Inf, 
-      #          alpha=0.2, 
-      #          fill="red")+
-      facet_grid(DayOfWeek~.)+
+    #          ymax=Inf, 
+    #          alpha=0.2, 
+    #          fill="red")+
+    facet_grid(DayOfWeek~.)+
       ggtitle("Trips vs. Time Of Day")
     
     
@@ -258,17 +327,27 @@ server <- function(input, output, session) {
              source = "TimePlot",
              tooltip = c("fill","text","more_text"))%>%
       layout(#title = 'Highlighting with Rectangles',
-             shapes = list(
-               list(type = "rect",
-                    fillcolor = "blue", line = list(color = "blue"), opacity = 0.3,
-                    x0 = convert2time("07:00:00"), x1 = convert2time("09:00:00"), xref = "x",
-                    y0 = 4, y1 = 12.5, yref = "y"),
-               list(type = "rect",
-                    fillcolor = "blue", line = list(color = "blue"), opacity = 0.2,
-                    x0 = convert2time("16:00:00"), x1 = convert2time("18:30:00"), xref = "x",
-                    y0 = 4, y1 = 12.5, yref = "y")))
+        shapes = list(
+          list(type = "rect",
+               fillcolor = "blue", line = list(color = "blue"), opacity = 0.3,
+               x0 = convert2time("07:00:00"), x1 = convert2time("09:00:00"), xref = "x",
+               y0 = 4, y1 = 12.5, yref = "y"),
+          list(type = "rect",
+               fillcolor = "blue", line = list(color = "blue"), opacity = 0.2,
+               x0 = convert2time("16:00:00"), x1 = convert2time("18:30:00"), xref = "x",
+               y0 = 4, y1 = 12.5, yref = "y")))
     
   })
+  
+  output$mondayPlot<-renderPlotly(plot_day(transactions_df, "Monday"))
+  output$tuesdayPlot<-renderPlotly(plot_day(transactions_df, "Tuesday"))
+  output$wednesdayPlot<-renderPlotly(plot_day(transactions_df, "Wednesday"))
+  output$thursdayPlot<-renderPlotly(plot_day(transactions_df, "Thursday"))
+  output$fridayPlot<-renderPlotly(plot_day(transactions_df, "Friday"))
+  output$saturdayPlot<-renderPlotly(plot_day(transactions_df, "Saturday"))
+  output$sundayPlot<-renderPlotly(plot_day(transactions_df, "Sunday"))
+  
+  
 }
 
 shinyApp(ui, server)
