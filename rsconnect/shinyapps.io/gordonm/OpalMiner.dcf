@@ -1,0 +1,12 @@
+name: OpalMiner
+title: OpalMiner
+username:
+account: gordonm
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 306159
+bundleId: 1285576
+url: https://gordonm.shinyapps.io/OpalMiner/
+when: 1521870183.19935
+asMultiple: FALSE
+asStatic: FALSE

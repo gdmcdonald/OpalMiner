@@ -57,7 +57,9 @@ scrapeOpalData<-function(username,password){
       html_node("img") %>% 
       html_attr(name = "alt")
     
-    this_transaction_data_frame$Mode <- mode_of_transport
+    this_transaction_data_frame$Mode <- factor(mode_of_transport,
+                                               levels = c("train","bus","lightrail","ferry"), 
+                                               exclude = NULL)
     
     transaction_data_frames_list[[pageIndex]]<-this_transaction_data_frame #put all pages' transactions together
   }
@@ -167,6 +169,89 @@ plot_day<-function(transactions_df,weekday_i_want){
   return(pl2)
 }
 
+plot_day_other<-function(transactions_df,weekday_i_want){
+  
+  dff<-transactions_df%>%
+    filter(!is.na(Mode),DayOfWeek == weekday_i_want)
+  
+  if(nrow(dff)<1){return(plotly_empty())}
+  
+  is.weekday<-(dff$Weekday[1]=="Weekday")
+  
+  wmi2<-dff%>%group_by(Mode, timeHr)%>%
+    summarise(my_count = sum(count))
+  
+  wmi3<-wmi2%>%
+    group_by(timeHr)%>%
+    summarise(total_count = sum(my_count))
+  
+  max_count<-max(wmi3$total_count)
+  
+  pl1<-plot_ly(data = wmi2,
+               x = ~timeHr, 
+               y = ~my_count,
+               color = ~Mode, 
+               type = "bar",
+               xaxis  = paste0("x",weekday_i_want))
+  if(is.weekday){
+    pl2<-pl1%>%
+      layout(barmode = "stack",
+             yaxis = list(title = weekday_i_want),
+             xaxis = list(range = c(0, 24),
+                          title = "Time of Day (24Hr)",
+                          autotick = FALSE,
+                          ticks = "outside",
+                          tick0 = 0,
+                          dtick = 3),
+             shapes = list(
+               list(type = "rect",
+                    fillcolor = "red", line = list(color = "red"), opacity = .2,
+                    x0 = 7, x1 = 9, xref = paste0("x",weekday_i_want),
+                    y0 = 0, y1 = max_count, yref = paste0("y",weekday_i_want)),
+               list(type = "rect",
+                    fillcolor = "red", line = list(color = "red"), opacity = .2,
+                    x0 = 16, x1 = 18.5, xref = paste0("x",weekday_i_want),
+                    y0 = 0, y1 = max_count, yref = paste0("y",weekday_i_want))
+             ))
+  } else {
+    pl2<-pl1%>%
+      layout(barmode = "stack",
+             yaxis = list(title = weekday_i_want),
+             xaxis = list(range = c(0, 24),
+                          title = "Time of Day (24Hr)",
+                          autotick = FALSE,
+                          ticks = "outside",
+                          tick0 = 0,
+                          dtick = 3)
+      )
+  }
+  return(pl2)
+}
+
+loc_by_timeHr<-function(all_joined_patronage,this_lat,this_lon,square_box,tap_type){
+  
+  all_joined_patronage%>%
+    filter(tap == tap_type,
+           lat>this_lat-square_box,
+           lat<this_lat+square_box,
+           lon>this_lon-square_box,
+           lon>this_lon+square_box)#%>%
+  #group_by(Mode,DateTime,timeHr,TimeOfDay,Day,DayOfWeek,Weekday)%>%
+  #summarise(total_count = sum(count))%>%
+  #ungroup()
+  
+}
+
+make_others_df<-function(transactions_df,all_joined_patronage){
+  
+}
+
+#load all_joined_patronage dataframe
+load("JoinedPatronage.RData")
+all_joined_patronage%>%
+  mutate(Mode = factor(Mode,levels = c("train","bus","lightrail","ferry")))
+
+
 dbHeader <- dashboardHeader(title = "OpalMiner")
 dbHeader$children[[2]]$children <-  tags$a(href='https://www.opal.com.au/',
                                            tags$img(src='https://d1ic4altzx8ueg.cloudfront.net/finder-au/wp-uploads/2016/01/opal-250x250.jpg',height='40',width='40'), "OpalMiner" )
@@ -176,6 +261,7 @@ sidebar <- dashboardSidebar(
     menuItem("Log in",        tabName = "login",    icon = icon("unlock")),
     menuItem("Data",          tabName = "data",     icon = icon("file")),
     menuItem("Date and Time", tabName = "datetime", icon = icon("calendar")), 
+    menuItem("Neighbours Date & Time ", tabName = "otherdatetime", icon = icon("users")), 
     menuItem("Locations",     tabName= "locations", icon = icon("map")),
     menuItem("Tutorial",      tabName= "tutorial",  icon = icon("question-circle"))
   ),
@@ -212,7 +298,19 @@ body <- dashboardBody(tabItems(
           plotlyOutput("fridayPlot",height = "200px"),
           plotlyOutput("saturdayPlot",height = "200px"),
           plotlyOutput("sundayPlot",height = "200px")
+  ),
+  tabItem(tabName = "otherdatetime",
+          #plotlyOutput("ggplotly_time_plot",height = "1000px")
+          
+          plotlyOutput("mondayPlotO",height = "200px"),
+          plotlyOutput("tuesdayPlotO",height = "200px"),
+          plotlyOutput("wednesdayPlotO",height = "200px"),
+          plotlyOutput("thursdayPlotO",height = "200px"),
+          plotlyOutput("fridayPlotO",height = "200px"),
+          plotlyOutput("saturdayPlotO",height = "200px"),
+          plotlyOutput("sundayPlotO",height = "200px")
   )
+  
   
 ))
 
@@ -346,6 +444,17 @@ server <- function(input, output, session) {
   output$fridayPlot<-renderPlotly(plot_day(transactions_df, "Friday"))
   output$saturdayPlot<-renderPlotly(plot_day(transactions_df, "Saturday"))
   output$sundayPlot<-renderPlotly(plot_day(transactions_df, "Sunday"))
+  
+  #bit of a cheat to make "others" stuck in one location
+  others_df<-rbind(loc_by_timeHr(all_joined_patronage,-33.86658, 151.2070, 0.01, "on"),
+                   loc_by_timeHr(all_joined_patronage,-33.86658, 151.2070, 0.01, "off"))
+  output$mondayPlotO<-renderPlotly(plot_day_other(others_df, "Monday"))
+  output$tuesdayPlotO<-renderPlotly(plot_day_other(others_df, "Tuesday"))
+  output$wednesdayPlotO<-renderPlotly(plot_day_other(others_df, "Wednesday"))
+  output$thursdayPlotO<-renderPlotly(plot_day_other(others_df, "Thursday"))
+  output$fridayPlotO<-renderPlotly(plot_day_other(others_df, "Friday"))
+  output$saturdayPlotO<-renderPlotly(plot_day_other(others_df, "Saturday"))
+  output$sundayPlotO<-renderPlotly(plot_day_other(others_df, "Sunday"))
   
   
 }
