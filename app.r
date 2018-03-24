@@ -39,7 +39,8 @@ scrapeOpalData<-function(username,password){
     # Check that we are logged in and recieving data
     if (length(transaction_data)==0) {
       print("incorrect login info")
-      break}
+      showNotification("Incorrect login information. You may need to register your opal card on www.opal.com.au")
+      return(NULL)}
     
     this_transaction_data_frame <- transaction_data[[1]]
     # How many elements = rows*columns in the data frame? 
@@ -330,8 +331,8 @@ server <- function(input, output, session) {
   output$value <- renderText({
     req(input$loginButton)
     withProgress({
-      transactions_df<<-scrapeOpalData(username = input$username,
-                                       password = input$password)
+      transactions_df<<-scrapeOpalData(username = isolate(input$username),
+                                       password = isolate(input$password))
       DT::datatable(transactions_df[,c("DayOfWeek","DateTime","Details","Amount")], 
                     options = list(pageLength = 13))
       
@@ -339,7 +340,7 @@ server <- function(input, output, session) {
     
     updateTabItems(session, "tabs", selected = "data")
     
-    isolate("Logged In")
+    if(is.null(transactions_df)){isolate("Not Logged In")} else {isolate("Logged In")}
     
   })
   
