@@ -366,7 +366,7 @@ body <- dashboardBody(tabItems(
 
 
 
-ui <- dashboardPage(
+ui <- dashboardPage(title = "OpalMiner",
   dbHeader,
   sidebar,
   body,
