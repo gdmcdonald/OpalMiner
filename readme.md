@@ -2,7 +2,7 @@
 
 ![OpalMiner](./www/miner.png)
 
-*OpalMiner* shows you the weekly patterns in your public transport usage.
+[*OpalMiner*](opalminer.info) shows you the weekly patterns in your public transport usage.
 
 It allows you to compare your usage to that of a comprable cohort of people tapping on and off at locations near where you do.
 
@@ -10,9 +10,12 @@ It also shows you how much money you could save by shifting the times at which y
 
 We do not save any of your data or information, anywhere.
 
-*OpalMiner* is built in RShiny using the following data:
+Try the app at [opalminer.info](opalminer.info)
+
+*OpalMiner* is built in [RShiny](https://shiny.rstudio.com/) using the following data:
+
 [Opal tap on tap off data](https://opendata.transport.nsw.gov.au/dataset/opal-tap-on-and-tap-off)
 
-[Your own opal car data](www.opal.com.au)
+[Your own opal card data](www.opal.com.au)
 
 [Opan Street Map](https://www.openstreetmap.org/)
