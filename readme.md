@@ -19,3 +19,8 @@ Try the app at [opalminer.info](https://opalminer.info)
 [Your own opal card data](https://www.opal.com.au)
 
 [Open Street Map](https://www.openstreetmap.org/)
+
+
+Screenshots:
+![Screenshot 1](./www/Screenshot1.png)
+![Screenshot 2](./www/Screenshot2.png)
