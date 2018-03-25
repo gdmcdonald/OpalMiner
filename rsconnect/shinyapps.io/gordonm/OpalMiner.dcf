@@ -5,9 +5,9 @@ account: gordonm
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 306159
-bundleId: 1285787
+bundleId: 1286461
 url: https://gordonm.shinyapps.io/OpalMiner/
-when: 1521889397.33556
+when: 1521937403.09984
 asMultiple: FALSE
 asStatic: FALSE
-ignoredFiles: data/.DS_Store
+ignoredFiles: www/.DS_Store

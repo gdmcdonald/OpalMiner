@@ -109,6 +109,12 @@ scrapeOpalData<-function(username,password){
 #transactions_df<-scrapeOpalData(username = "blah@gmail.com",
 #                                password = "notrealpassword")
 
+convert2time<-function(my_time){
+  as.POSIXct(my_time, 
+             format="%H:%M:%S", 
+             tz = "GMT")
+}
+
 plot_day<-function(transactions_df,weekday_i_want){
   
   dff<-transactions_df%>%
@@ -277,7 +283,18 @@ body <- dashboardBody(tabItems(
           textInput("username", "Opal Username/email:"),
           passwordInput("password", "Password:"),
           actionButton("loginButton","Login", icon("unlock-alt")),
-          verbatimTextOutput("value")),
+          verbatimTextOutput("value"),
+          br(),br(),
+          box(p(strong("OpalMiner")," shows you the weekly patterns in your public transport usage."),
+              br(),
+              p("It allows you to compare your usage to that of a comprable cohort of people tapping on and off at locations near where you do."),
+              br(), 
+              p("It also shows you how much money you could save by shifting the times at which you ride the train."),
+              br(),
+              p("We do not save any of your data or information, anywhere."),
+              br(),
+              tags$img(src='miner.png',width='40%',align = "middle"),width = 12
+              )),
   
   
   ## tabular data tab
@@ -323,6 +340,10 @@ body <- dashboardBody(tabItems(
           DT::dataTableOutput("summary_table"),
           sliderInput("num_weeks","Last n weeks", min = 1, max = 52, value = 12, step = 1)
   ),
+  tabItem(tabName = "locations",
+          box(tags$img(src='map.gif',width='80%'),
+              title = "Map",
+              width = 12)),
   
   tabItem(tabName = "about",
           box(p(strong("OpalMiner")," shows you the weekly patterns in your public transport usage."),
@@ -330,6 +351,10 @@ body <- dashboardBody(tabItems(
               p("It allows you to compare your usage to that of a comprable cohort of people tapping on and off at locations near where you do."),
               br(), 
               p("It also shows you how much money you could save by shifting the times at which you ride the train."),
+              br(),
+              p("We do not save any of your data or information, anywhere."),
+              br(),
+              tags$img(src='miner.png',width='70%'),
               title = "About")
   )
   
@@ -356,7 +381,7 @@ server <- function(input, output, session) {
                                        password = isolate(input$password))
       DT::datatable(transactions_df[,c("DayOfWeek","DateTime","Details","Amount")], 
                     options = list(pageLength = 13))
-      
+      transactions_df$Mode[grepl("^Tap on reversal*", transactions_df$Details)]<<-NA
     },message = "Loading Opal Data",
     detail = "This may take a minute or two")
     
@@ -402,11 +427,7 @@ server <- function(input, output, session) {
     #                   format="%d/%m/%Y",
     #                   tz = "GMT")
     
-    convert2time<-function(my_time){
-      as.POSIXct(my_time, 
-                 format="%H:%M:%S", 
-                 tz = "GMT")
-    }
+    
     
     
     
