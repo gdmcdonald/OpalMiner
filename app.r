@@ -293,7 +293,7 @@ body <- dashboardBody(tabItems(
               br(),
               p("We do not save any of your data or information, anywhere."),
               br(),
-              tags$img(src='miner.png',width='40%',align = "middle"),width = 12
+              tags$img(src='miner.jpg',width='40%',align = "middle"),width = 12
               )),
   
   
@@ -354,7 +354,7 @@ body <- dashboardBody(tabItems(
               br(),
               p("We do not save any of your data or information, anywhere."),
               br(),
-              tags$img(src='miner.png',width='70%'),
+              tags$img(src='miner.jpg',width='70%'),
               title = "About")
   )
   
