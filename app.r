@@ -261,7 +261,7 @@ all_joined_patronage%>%
 
 dbHeader <- dashboardHeader(title = "OpalMiner")
 dbHeader$children[[2]]$children <-  tags$a(href='https://www.opal.com.au/',
-                                           tags$img(src='https://d1ic4altzx8ueg.cloudfront.net/finder-au/wp-uploads/2016/01/opal-250x250.jpg',height='40',width='40'), "OpalMiner" )
+                                           tags$img(src='opal.jpg',height='40',width='40'), "OpalMiner" )
 
 sidebar <- dashboardSidebar(
   sidebarMenu(
