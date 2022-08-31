@@ -1,6 +1,6 @@
 # OpalMiner
 
-![OpalMiner](./www/miner.png)
+![OpalMiner](./www/miner.jpg)
 
 [*OpalMiner*](https://opalminer.info) shows you the weekly patterns in your public transport usage.
 
