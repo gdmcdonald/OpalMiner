@@ -27,7 +27,7 @@ scrapeOpalData<-function(username,password){
   # Loop through each page starting with page 1 (limit = page 100) and scrape opal data.
   for (pageIndex in 1:100) {
     
-    url <- jump_to(session, paste0("https://www.opal.com.au/registered/opal-card-transactions/opal-card-activities-list?pageIndex=",pageIndex))
+    url <- jump_to(session, paste0("https://www.opal.com.au/registered/opal-card-transactions/opal-card-activities-list?cardIndex=1&pageIndex=",pageIndex))
     
     web_table<-url%>%
       read_html()%>%
