@@ -9,72 +9,73 @@ library(plotly)
 
 # define the scraping function
 scrapeOpalData<-function(username,password){
-  
+
   login_url <- "https://www.opal.com.au/login/index"
   session <- html_session(login_url)
-  
+
   form <- html_form(read_html(login_url))[[2]]
-  
+
   filled_form <- set_values(form,
                             h_username = username,
                             h_password = password)
-  
+
   submit_form(session, filled_form)
-  
+
   # Initialize an empty list
   transaction_data_frames_list = list()
-  
+  slot = 0
   # Loop through each page starting with page 1 (limit = page 100) and scrape opal data.
-  for (pageIndex in 1:100) {
-    
-    url <- jump_to(session, paste0("https://www.opal.com.au/registered/opal-card-transactions/opal-card-activities-list?cardIndex=1&pageIndex=",pageIndex))
-    
-    web_table<-url%>%
-      read_html()%>%
-      html_nodes(xpath = '//*[@id="transaction-data"]')
-    
-    transaction_data<-web_table%>%
-      html_table(trim = F)
-    
-    # Check that we are logged in and recieving data
-    if (length(transaction_data)==0) {
-      print("incorrect login info")
-      showNotification("Incorrect login information. You may need to register your opal card on www.opal.com.au")
-      return(NULL)}
-    
-    this_transaction_data_frame <- transaction_data[[1]]
-    # How many elements = rows*columns in the data frame? 
-    # 1x1 "NA" = no data.
-    num_el = nrow(this_transaction_data_frame)*ncol(this_transaction_data_frame)
-    
-    # Test for having gone beyond the last page
-    # Written this way to catch the empty set as well as the 1x1 "NA" dataframe I expect it to return.
-    if (!isTRUE(num_el>1)) break
-    
-    # Extract the mode of transport from the alt text of the little "T", "F" or "B" images (including NA for not a trip)
-    scope<-web_table%>%html_children()
-    mode_of_transport <- scope[3] %>%
-      html_nodes(xpath = '//tr/td[3]') %>%
-      html_node("img") %>% 
-      html_attr(name = "alt")
-    
-    this_transaction_data_frame$Mode <- factor(mode_of_transport,
-                                               levels = c("train","bus","lightrail","ferry"), 
-                                               exclude = NULL)
-    
-    transaction_data_frames_list[[pageIndex]]<-this_transaction_data_frame #put all pages' transactions together
-  }
-  
+  for (cardIndex in 1:9) {
+    for (pageIndex in 1:100) {
+
+      url <- jump_to(session, paste0("https://www.opal.com.au/registered/opal-card-transactions/opal-card-activities-list?cardIndex=",cardIndex,"&pageIndex=",pageIndex))
+
+      web_table<-url%>%
+        read_html()%>%
+        html_nodes(xpath = '//*[@id="transaction-data"]')
+
+      transaction_data<-web_table%>%
+        html_table(trim = F)
+
+      # Check that we are logged in and recieving data
+      if (length(transaction_data)==0) {
+        print("incorrect login info")
+        showNotification("Incorrect login information. You may need to register your opal card on www.opal.com.au")
+        return(NULL)}
+
+      this_transaction_data_frame <- transaction_data[[1]]
+      # How many elements = rows*columns in the data frame?
+      # 1x1 "NA" = no data.
+      num_el = nrow(this_transaction_data_frame)*ncol(this_transaction_data_frame)
+
+      # Test for having gone beyond the last page
+      # Written this way to catch the empty set as well as the 1x1 "NA" dataframe I expect it to return.
+      if (!isTRUE(num_el>1)) break
+      slot <- slot+1 #update loop counter if there's data
+      # Extract the mode of transport from the alt text of the little "T", "F" or "B" images (including NA for not a trip)
+      scope<-web_table%>%html_children()
+      mode_of_transport <- scope[3] %>%
+        html_nodes(xpath = '//tr/td[3]') %>%
+        html_node("img") %>%
+        html_attr(name = "alt")
+
+      this_transaction_data_frame$Mode <- factor(mode_of_transport,
+                                                 levels = c("train","bus","lightrail","ferry"),
+                                                 exclude = NULL)
+
+      transaction_data_frames_list[[slot]]<-this_transaction_data_frame #put all pages' transactions together
+    }}
+
   # Combine the list into one big dataframe
   transactions_df<-rbindlist(transaction_data_frames_list)
-  
+
   #Reformat the date/time, reformat the money to numeric
   transactions_df<-transactions_df%>%
     mutate(DateTime = paste0(substring(`Date/time`,4,13),
                              " ",
                              substring(`Date/time`,14,18))%>%
              dmy_hm( tz = "UTC"),
-           
+
            Fare_n = Fare%>%
              substring(2)%>%
              as.numeric(),
@@ -86,23 +87,23 @@ scrapeOpalData<-function(username,password){
                                 substring(2)%>%
                                 as.numeric(),
                               Discount_n -Fare_n),
-           TimeOfDay = as.POSIXct(strftime(DateTime, 
+           TimeOfDay = as.POSIXct(strftime(DateTime,
                                            format="%H:%M:%S",
-                                           tz = "GMT"), 
+                                           tz = "GMT"),
                                   format="%H:%M:%S", tz = "GMT"),
            Day = as.Date(DateTime),
            DayOfWeek = weekdays(Day),
            Weekday = ifelse(DayOfWeek %in% c("Saturday", "Sunday"),"Weekend","Weekday"),
-           DayOfWeek = factor(DayOfWeek,levels = c( "Monday",  
+           DayOfWeek = factor(DayOfWeek,levels = c( "Monday",
                                                     "Tuesday",
-                                                    "Wednesday", 
-                                                    "Thursday", 
+                                                    "Wednesday",
+                                                    "Thursday",
                                                     "Friday",
-                                                    "Saturday", 
+                                                    "Saturday",
                                                     "Sunday") ))
-  
+
   return(transactions_df)
-  
+
 }
 
 #example usage
@@ -110,35 +111,35 @@ scrapeOpalData<-function(username,password){
 #                                password = "notrealpassword")
 
 convert2time<-function(my_time){
-  as.POSIXct(my_time, 
-             format="%H:%M:%S", 
+  as.POSIXct(my_time,
+             format="%H:%M:%S",
              tz = "GMT")
 }
 
 plot_day<-function(transactions_df,weekday_i_want){
-  
+
   dff<-transactions_df%>%
     filter(!is.na(Mode),DayOfWeek == weekday_i_want)
-  
+
   if(nrow(dff)<1){return(plotly_empty())}
-  
+
   is.weekday<-(dff$Weekday[1]=="Weekday")
-  
+
   wmi2<-dff%>%
     mutate(timeHr = strftime(TimeOfDay,format="%H",tz = "GMT")%>%as.numeric())%>%
     group_by(Mode, timeHr)%>%
     summarise(my_count = n())
-  
+
   wmi3<-wmi2%>%
     group_by(timeHr)%>%
     summarise(total_count = sum(my_count))
-  
+
   max_count<-max(wmi3$total_count)
-  
+
   pl1<-plot_ly(data = wmi2,
-               x = ~timeHr, 
+               x = ~timeHr,
                y = ~my_count,
-               color = ~Mode, 
+               color = ~Mode,
                type = "bar",
                xaxis  = paste0("x",weekday_i_want))
   if(is.weekday){
@@ -177,27 +178,27 @@ plot_day<-function(transactions_df,weekday_i_want){
 }
 
 plot_day_other<-function(transactions_df,weekday_i_want){
-  
+
   dff<-transactions_df%>%
     filter(!is.na(Mode),DayOfWeek == weekday_i_want)
-  
+
   if(nrow(dff)<1){return(plotly_empty())}
-  
+
   is.weekday<-(dff$Weekday[1]=="Weekday")
-  
+
   wmi2<-dff%>%group_by(Mode, timeHr)%>%
     summarise(my_count = sum(count))
-  
+
   wmi3<-wmi2%>%
     group_by(timeHr)%>%
     summarise(total_count = sum(my_count))
-  
+
   max_count<-max(wmi3$total_count)
-  
+
   pl1<-plot_ly(data = wmi2,
-               x = ~timeHr, 
+               x = ~timeHr,
                y = ~my_count,
-               color = ~Mode, 
+               color = ~Mode,
                type = "bar",
                xaxis  = paste0("x",weekday_i_want))
   if(is.weekday){
@@ -236,7 +237,7 @@ plot_day_other<-function(transactions_df,weekday_i_want){
 }
 
 loc_by_timeHr<-function(all_joined_patronage,this_lat,this_lon,square_box,tap_type){
-  
+
   all_joined_patronage%>%
     filter(tap == tap_type,
            lat>this_lat-square_box,
@@ -246,11 +247,11 @@ loc_by_timeHr<-function(all_joined_patronage,this_lat,this_lon,square_box,tap_ty
   #group_by(Mode,DateTime,timeHr,TimeOfDay,Day,DayOfWeek,Weekday)%>%
   #summarise(total_count = sum(count))%>%
   #ungroup()
-  
+
 }
 
 make_others_df<-function(transactions_df,all_joined_patronage){
-  
+
 }
 
 #load all_joined_patronage dataframe
@@ -267,8 +268,8 @@ sidebar <- dashboardSidebar(
   sidebarMenu(
     menuItem("Log in",        tabName = "login",    icon = icon("unlock")),
     menuItem("Data",          tabName = "data",     icon = icon("file")),
-    menuItem("Date and Time", tabName = "datetime", icon = icon("calendar")), 
-    menuItem("Neighbours Date & Time", tabName = "otherdatetime", icon = icon("users")), 
+    menuItem("Date and Time", tabName = "datetime", icon = icon("calendar")),
+    menuItem("Neighbours Date & Time", tabName = "otherdatetime", icon = icon("users")),
     menuItem("Trip  and $ Summary",       tabName = "money",    icon = icon("flag")),
     menuItem("Locations",     tabName= "locations", icon = icon("map")),
     menuItem("About",      tabName= "about",  icon = icon("question-circle"))
@@ -276,9 +277,9 @@ sidebar <- dashboardSidebar(
   collapsed = TRUE)
 
 body <- dashboardBody(tabItems(
-  
+
   ## login tab
-  
+
   tabItem(tabName = "login",
           textInput("username", "Opal Username/email:"),
           passwordInput("password", "Password:"),
@@ -288,26 +289,26 @@ body <- dashboardBody(tabItems(
           box(p(strong("OpalMiner")," shows you the weekly patterns in your public transport usage."),
               br(),
               p("It allows you to compare your usage to that of a comprable cohort of people tapping on and off at locations near where you do."),
-              br(), 
+              br(),
               p("It also shows you how much money you could save by shifting the times at which you ride the train."),
               br(),
               p("We do not save any of your data or information, anywhere."),
               br(),
               tags$img(src='miner.jpg',width='40%',align = "middle"),width = 12
-              )),
-  
-  
+          )),
+
+
   ## tabular data tab
-  
+
   tabItem(tabName = "data",
           box(downloadButton('downloadData', 'Download Opal Data'),
               title = "Export your opal card data as a .csv file"
           ),
           DT::DTOutput("opalDataTable")),
-  
-  
+
+
   ## date/time tab
-  
+
   tabItem(tabName = "datetime",
           #plotlyOutput("ggplotly_time_plot",height = "1000px")
           box(
@@ -344,12 +345,12 @@ body <- dashboardBody(tabItems(
           box(tags$img(src='map.gif',width='80%'),
               title = "Map",
               width = 12)),
-  
+
   tabItem(tabName = "about",
           box(p(strong("OpalMiner")," shows you the weekly patterns in your public transport usage."),
               br(),
               p("It allows you to compare your usage to that of a comprable cohort of people tapping on and off at locations near where you do."),
-              br(), 
+              br(),
               p("It also shows you how much money you could save by shifting the times at which you ride the train."),
               br(),
               p("We do not save any of your data or information, anywhere."),
@@ -357,8 +358,8 @@ body <- dashboardBody(tabItems(
               tags$img(src='miner.jpg',width='70%'),
               title = "About")
   )
-  
-  
+
+
 ))
 
 
@@ -367,10 +368,10 @@ body <- dashboardBody(tabItems(
 
 
 ui <- dashboardPage(title = "OpalMiner",
-  dbHeader,
-  sidebar,
-  body,
-  skin = "black"
+                    dbHeader,
+                    sidebar,
+                    body,
+                    skin = "black"
 )
 
 server <- function(input, output, session) {
@@ -379,31 +380,31 @@ server <- function(input, output, session) {
     withProgress({
       transactions_df<<-scrapeOpalData(username = isolate(input$username),
                                        password = isolate(input$password))
-      DT::datatable(transactions_df[,c("DayOfWeek","DateTime","Details","Amount")], 
+      DT::datatable(transactions_df[,c("DayOfWeek","DateTime","Details","Amount")],
                     options = list(pageLength = 13))
       transactions_df$Mode[grepl("^Tap on reversal*", transactions_df$Details)]<<-NA
     },message = "Loading Opal Data",
     detail = "This may take a minute or two")
-    
+
     updateTabItems(session, "tabs", selected = "data")
-    
+
     if(is.null(transactions_df)){isolate("Not Logged In, perhaps your password is incorrect")} else {isolate("Logged In, click the hamburger to see the menu above.")}
-    
+
   })
-  
-  ## DT library to renderDataTable 
+
+  ## DT library to renderDataTable
   output$opalDataTable <- renderDT(
     {
-      DT::datatable(transactions_df[,c("DayOfWeek","DateTime","Details","Amount")], 
+      DT::datatable(transactions_df[,c("DayOfWeek","DateTime","Details","Amount")],
                     options = list(pageLength = 13))
     }
   )
-  
+
   output$downloadData <- downloadHandler(
     filename <- function(){
       paste("OpalCardData.csv")
     },
-    
+
     content = function(file) {
       write.csv(transactions_df[,c("DayOfWeek",
                                    "DateTime",
@@ -415,59 +416,59 @@ server <- function(input, output, session) {
                                    "Transactionnumber")],
                 file = file)
     },
-    
+
     contentType = "text/csv"
   )
-  
+
   ## plot ggplotly time plot
   output$ggplotly_time_plot <- renderPlotly({
     req(transactions_df)
-    
-    # demoDay<-strftime(transactions_df$TimeOfDay[1], 
+
+    # demoDay<-strftime(transactions_df$TimeOfDay[1],
     #                   format="%d/%m/%Y",
     #                   tz = "GMT")
-    
-    
-    
-    
-    
-    
+
+
+
+
+
+
     #make the plot with ggplot
     time_ggplot<-ggplot(transactions_df%>%
                           filter(!is.na(Mode)),
                         aes(x = TimeOfDay,
                             fill = Mode,
-                            text = strftime(TimeOfDay, 
+                            text = strftime(TimeOfDay,
                                             format="%H:%M:%S",
                                             tz = "GMT"),
                             more_text = Details))+
       geom_histogram(bins = 24)  +
       scale_x_datetime(date_labels = "%H:%M",
                        date_minor_breaks = "1 hour")+
-      theme(axis.text.x = element_text(angle = 90, 
+      theme(axis.text.x = element_text(angle = 90,
                                        hjust = 1,
                                        vjust = .5) )+
       labs(y="Frequency",x="Time of day (24hr)", fill="Trip")+
-      # annotate("rect", 
-      #          xmin=convert2time("07:00:00"), 
-      #          xmax=convert2time("09:00:00"), 
-      #          ymin=0, 
-      #          ymax=Inf, 
-      #          alpha=0.2, 
+      # annotate("rect",
+      #          xmin=convert2time("07:00:00"),
+      #          xmax=convert2time("09:00:00"),
+      #          ymin=0,
+      #          ymax=Inf,
+      #          alpha=0.2,
       #          fill="red")+
-      # annotate("rect", 
-      #          xmin=convert2time("16:00:00"), 
-      #          xmax=convert2time("18:30:00"), 
-      #          ymin=0, 
-    #          ymax=Inf, 
-    #          alpha=0.2, 
+      # annotate("rect",
+      #          xmin=convert2time("16:00:00"),
+      #          xmax=convert2time("18:30:00"),
+      #          ymin=0,
+    #          ymax=Inf,
+    #          alpha=0.2,
     #          fill="red")+
     facet_grid(DayOfWeek~.)+
       ggtitle("Trips vs. Time Of Day")
-    
-    
+
+
     #convert to plotly, label so you can listen for clicks...
-    ggplotly(time_ggplot, 
+    ggplotly(time_ggplot,
              source = "TimePlot",
              tooltip = c("fill","text","more_text"))%>%
       layout(#title = 'Highlighting with Rectangles',
@@ -480,9 +481,9 @@ server <- function(input, output, session) {
                fillcolor = "blue", line = list(color = "blue"), opacity = 0.2,
                x0 = convert2time("16:00:00"), x1 = convert2time("18:30:00"), xref = "x",
                y0 = 4, y1 = 12.5, yref = "y")))
-    
+
   })
-  
+
   output$mondayPlot<-renderPlotly(plot_day(transactions_df, "Monday"))
   output$tuesdayPlot<-renderPlotly(plot_day(transactions_df, "Tuesday"))
   output$wednesdayPlot<-renderPlotly(plot_day(transactions_df, "Wednesday"))
@@ -490,7 +491,7 @@ server <- function(input, output, session) {
   output$fridayPlot<-renderPlotly(plot_day(transactions_df, "Friday"))
   output$saturdayPlot<-renderPlotly(plot_day(transactions_df, "Saturday"))
   output$sundayPlot<-renderPlotly(plot_day(transactions_df, "Sunday"))
-  
+
   #bit of a cheat to make "others" stuck in one location
   others_df<-rbind(loc_by_timeHr(all_joined_patronage,-33.86658, 151.2070, 0.01, "on"),
                    loc_by_timeHr(all_joined_patronage,-33.86658, 151.2070, 0.01, "off"))
@@ -501,18 +502,18 @@ server <- function(input, output, session) {
   output$fridayPlotO<-renderPlotly(plot_day_other(others_df, "Friday"))
   output$saturdayPlotO<-renderPlotly(plot_day_other(others_df, "Saturday"))
   output$sundayPlotO<-renderPlotly(plot_day_other(others_df, "Sunday"))
-  
+
   #summary info DT
   output$summary_table <- renderDT(
     {
-      
+
       maxDate <-max(transactions_df$DateTime)
-      
+
       intermed<-transactions_df%>%
         mutate(Week_number = lubridate::isoweek(transactions_df$DateTime))%>%
         filter(!is.na(Mode),
                input$num_weeks > (lubridate::isoweek(maxDate) - Week_number) %%52,
-               (maxDate-DateTime)<3600*24*365)%>%  
+               (maxDate-DateTime)<3600*24*365)%>%
         group_by(Week_number,Mode)%>%
         summarise(spent_per_week = sum(Amount_n,na.rm = T),
                   disc_per_week = sum(Discount_n,na.rm = T),
@@ -522,13 +523,13 @@ server <- function(input, output, session) {
         summarise(av_spent_per_week = round(mean(spent_per_week,na.rm = T),2),
                   av_trips_per_week = round(mean(trips_per_week,na.rm = T),1),
                   av_disc_per_week = round(mean(disc_per_week,na.rm = T),1))
-      
+
       intermed2<-transactions_df%>%
         mutate(Week_number = lubridate::isoweek(transactions_df$DateTime))%>%
         filter(!is.na(Mode),
                input$num_weeks > (lubridate::isoweek(maxDate) - Week_number) %%52,
                (maxDate-DateTime)<3600*24*365,
-               `Fare Applied`=="Travel Reward")%>%  
+               `Fare Applied`=="Travel Reward")%>%
         group_by(Week_number,Mode)%>%
         summarise(spent_per_week = sum(Amount_n,na.rm = T),
                   trips_per_week = n())%>%
@@ -536,7 +537,7 @@ server <- function(input, output, session) {
         group_by(Mode)%>%
         summarise(av_spent_per_week = mean(spent_per_week,na.rm = T),
                   av_trips_per_week = mean(trips_per_week,na.rm = T))
-      
+
       train_peak<-transactions_df%>%
         mutate(Week_number = lubridate::isoweek(transactions_df$DateTime),
                Peak_time = if_else(abs(TimeOfDay-convert2time("08:00:00"))<60 |
@@ -547,7 +548,7 @@ server <- function(input, output, session) {
         filter(Mode == "train",
                input$num_weeks > (lubridate::isoweek(maxDate) - Week_number) %%52,
                (maxDate-DateTime)<3600*24*365,
-               Peak_time)%>%  
+               Peak_time)%>%
         group_by(Week_number,Mode)%>%
         summarise(spent_per_week = sum(Amount_n,na.rm = T),
                   trips_per_week = n())%>%
@@ -555,7 +556,7 @@ server <- function(input, output, session) {
         group_by(Mode)%>%
         summarise(av_spent_per_week = mean(spent_per_week,na.rm = T),
                   av_trips_per_week = mean(trips_per_week,na.rm = T))
-      
+
       dollars_spent<<- abs(sum(intermed$av_spent_per_week))
       av_num_trips<<-sum(intermed$av_trips_per_week)
       dollars_saveable<<- abs(train_peak$av_spent_per_week[1]*0.3)
@@ -563,13 +564,13 @@ server <- function(input, output, session) {
       av_reward_trips<<-sum(intermed2$av_trips_per_week)
       pct_half_price<<-av_reward_trips/av_num_trips*100
       dollars_already_saved<<-sum(intermed$av_disc_per_week)
-      
+
       DT::datatable(intermed,colnames = c("Mode of Transport", "Amount Spent in a week ($, av.)", "Number of trips per week (av.)","Av. discounts per week ($)"))
     }
   )
-  
-  
-  
+
+
+
   #output$dollars_spent
   #output$dollars_saveable
   #output$pct_half_price
