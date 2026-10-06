@@ -1,34 +1,55 @@
 library(shinydashboard)
 library(DT)
 library(rvest)
-library(data.table)
-library(tidyverse)
+#library(data.table)
+#library(tidyverse)
+library(dplyr)
+library(stringr)
 library(lubridate)
-library(ggplot2)
+#library(ggplot2)
 library(plotly)
 
 # define the scraping function
 scrapeOpalData<-function(username,password){
 
   login_url <- "https://www.opal.com.au/login/index"
-  session <- html_session(login_url)
+  this_session <- session(login_url)
 
   form <- html_form(read_html(login_url))[[2]]
 
-  filled_form <- set_values(form,
+  filled_form <- html_form_set(form,
                             h_username = username,
                             h_password = password)
 
-  submit_form(session, filled_form)
+  session_submit(this_session, filled_form)
 
   # Initialize an empty list
   transaction_data_frames_list = list()
   slot = 0
   # Loop through each page starting with page 1 (limit = page 100) and scrape opal data.
+  none_in_card <- FALSE
   for (cardIndex in 1:9) {
     for (pageIndex in 1:100) {
 
-      url <- jump_to(session, paste0("https://www.opal.com.au/registered/opal-card-transactions/opal-card-activities-list?cardIndex=",cardIndex,"&pageIndex=",pageIndex))
+      url <- session_jump_to(this_session, paste0("https://www.opal.com.au/registered/opal-card-transactions/opal-card-activities-list?cardIndex=",cardIndex,"&pageIndex=",pageIndex))
+
+      # Check for 400 response
+      if (httr::status_code(url) == 400) {
+        print(paste("Card", cardIndex, "Page", pageIndex, "not found (400 response)"))
+        #if(pageIndex==1){none_in_card <- TRUE} #set stop criterion for cards
+        break  # Stop processing this card's pages
+      }
+
+      # Check for "no activities" message
+      no_activities <- url %>%
+        read_html() %>%
+        html_text() %>%
+        str_detect("has no activities for the selected date")
+
+      if (no_activities) {
+        print(paste("Card", cardIndex, "Page", pageIndex, "has no activities"))
+        break  # Stop processing this card's pages
+      }
 
       web_table<-url%>%
         read_html()%>%
@@ -52,22 +73,28 @@ scrapeOpalData<-function(username,password){
       # Written this way to catch the empty set as well as the 1x1 "NA" dataframe I expect it to return.
       if (!isTRUE(num_el>1)) break
       slot <- slot+1 #update loop counter if there's data
+
+      print(paste("Card", cardIndex, "Page", pageIndex, "has activity data"))
+
       # Extract the mode of transport from the alt text of the little "T", "F" or "B" images (including NA for not a trip)
       scope<-web_table%>%html_children()
-      mode_of_transport <- scope[3] %>%
+      this_transaction_data_frame$Mode <-
+        #Mode <-
+        scope[3] %>%
         html_nodes(xpath = '//tr/td[3]') %>%
         html_node("img") %>%
         html_attr(name = "alt")
 
-      this_transaction_data_frame$Mode <- factor(mode_of_transport,
-                                                 levels = c("train","bus","lightrail","ferry"),
-                                                 exclude = NULL)
+      #this_transaction_data_frame$Mode <- factor(Mode,
+      #                                           levels = c("train","bus","lightrail","ferry"),
+      #                                           exclude = NULL)
 
       transaction_data_frames_list[[slot]]<-this_transaction_data_frame #put all pages' transactions together
     }}
 
   # Combine the list into one big dataframe
-  transactions_df<-rbindlist(transaction_data_frames_list)
+  #transactions_df<-rbindlist(transaction_data_frames_list)
+  transactions_df<-bind_rows(transaction_data_frames_list)
 
   #Reformat the date/time, reformat the money to numeric
   transactions_df<-transactions_df%>%
@@ -262,7 +289,7 @@ all_joined_patronage%>%
 
 dbHeader <- dashboardHeader(title = "OpalMiner")
 dbHeader$children[[2]]$children <-  tags$a(href='https://www.opal.com.au/',
-                                           tags$img(src='opal.jpg',height='40',width='40'), "OpalMiner" )
+                                           tags$img(src='opal_miner.svg',height='49',width='67'), "OpalMiner" )
 
 sidebar <- dashboardSidebar(
   sidebarMenu(
@@ -283,7 +310,7 @@ body <- dashboardBody(tabItems(
   tabItem(tabName = "login",
           textInput("username", "Opal Username/email:"),
           passwordInput("password", "Password:"),
-          actionButton("loginButton","Login", icon("unlock-alt")),
+          actionButton("loginButton","Login", icon("unlock-alt"),class = "btn-primary"),
           verbatimTextOutput("value"),
           br(),br(),
           box(p(strong("OpalMiner")," shows you the weekly patterns in your public transport usage."),
@@ -292,9 +319,9 @@ body <- dashboardBody(tabItems(
               br(),
               p("It also shows you how much money you could save by shifting the times at which you ride the train."),
               br(),
-              p("We do not save any of your data or information, anywhere."),
+              p("Your data stays in your browser - we do not save any of your data or information, anywhere."),
               br(),
-              tags$img(src='miner.jpg',width='40%',align = "middle"),width = 12
+              tags$img(src='opal_miner.svg',width='40%',align = "middle"),width = 12
           )),
 
 
